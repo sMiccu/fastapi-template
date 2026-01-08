@@ -1,0 +1,228 @@
+# FastAPI Template - Cursor AI Rules
+
+このファイルはCursorが自動的に読み込み、AIの振る舞いを制御します。
+
+## プロジェクト概要
+
+このプロジェクトは、DDDとヘキサゴナルアーキテクチャを採用したFastAPIバックエンドテンプレートです。
+
+## 必須読み込みドキュメント
+
+コード生成・修正時は、以下のドキュメントを**必ず参照**してください：
+
+1. **docs/ARCHITECTURE.md** - アーキテクチャ設計の判断基準
+2. **docs/CONVENTIONS.md** - コーディング規約
+3. **docs/DOMAIN_MODEL.md** - ドメインモデル設計
+4. **docs/PATTERNS.md** - 実装パターン集
+
+## コーディングルール
+
+### 1. アーキテクチャ選択
+
+新しい機能を追加する際：
+
+**シンプルなCRUD（catalog パターン）:**
+```
+- 単純な読み書き
+- ビジネスロジックが薄い
+→ modules/catalog/ のレイヤードパターンを使用
+```
+
+**複雑なビジネスロジック（orders パターン）:**
+```
+- 複雑な状態遷移
+- 重要なビジネスルール
+- 外部連携が複数
+→ modules/orders/ のDDDパターンを使用
+```
+
+### 2. 型ヒント（必須）
+
+```python
+# ✅ Good
+def calculate_total(items: list[OrderItem]) -> Money:
+    pass
+
+# ❌ Bad - 型ヒントなし
+def calculate_total(items):
+    pass
+```
+
+### 3. 命名規則
+
+- **クラス**: PascalCase (`Order`, `OrderItem`)
+- **関数・変数**: snake_case (`calculate_total`, `order_id`)
+- **定数**: UPPER_SNAKE_CASE (`MAX_RETRY_COUNT`)
+- **プライベート**: _snake_case (`_items`, `_domain_events`)
+
+### 4. ドメイン層のルール
+
+```python
+# ビジネスルールはEntityに
+class Order:
+    def add_item(self, item: OrderItem) -> None:
+        if self.status != OrderStatus.PENDING:
+            raise OrderAlreadyConfirmedException()  # ビジネスルール
+        self._items.append(item)
+
+# ❌ Bad - ビジネスルールをService層に書かない
+class OrderService:
+    def add_item(self, order, item):
+        if order.status != "pending":  # ビジネスルールがService層に漏れている
+            raise Exception()
+```
+
+### 5. Repository パターン
+
+```python
+# DDDモジュールではInterfaceを定義
+class OrderRepository(ABC):  # Port
+    @abstractmethod
+    def find_by_id(self, order_id: OrderId) -> Order | None:
+        pass
+
+# 実装はinfrastructure層
+class OrderRepositoryImpl(OrderRepository):  # Adapter
+    def find_by_id(self, order_id: OrderId) -> Order | None:
+        # SQLAlchemy実装
+        pass
+```
+
+### 6. 依存性注入
+
+FastAPIのDependsを使用：
+
+```python
+def get_order_repository(
+    session: Annotated[Session, Depends(get_db)]
+) -> OrderRepository:
+    return OrderRepositoryImpl(session)
+
+@router.post("/orders")
+def create_order(
+    use_case: Annotated[CreateOrderUseCase, Depends(get_create_order_use_case)]
+):
+    pass
+```
+
+### 7. エラーハンドリング
+
+```python
+# カスタム例外を使用
+class OrderException(DomainException):
+    pass
+
+class EmptyOrderError(OrderException):
+    def __init__(self) -> None:
+        super().__init__("Cannot confirm an empty order")
+
+# ❌ Bad
+raise Exception("Error")  # 汎用的すぎる
+```
+
+### 8. テスト
+
+新しいコードには必ずテストを書く：
+
+```python
+# Unit Test（ドメイン層）
+def test_order_add_item():
+    order = Order.create(customer_id)
+    order.add_item(item)
+    assert len(order.items) == 1
+```
+
+## ファイル構造
+
+### シンプルなモジュール（catalog）
+```
+modules/catalog/
+├── router.py         # API
+├── schemas.py        # Pydantic
+├── service.py        # ビジネスロジック
+├── repository.py     # DB操作
+└── models.py         # SQLAlchemy
+```
+
+### 複雑なモジュール（orders）
+```
+modules/orders/
+├── domain/                # ドメイン層
+│   ├── entities/
+│   ├── value_objects/
+│   ├── repositories/      # Interface
+│   └── exceptions.py
+├── application/           # Use Cases
+│   ├── dto/
+│   └── use_cases/
+├── infrastructure/        # 実装
+│   └── persistence/
+└── presentation/          # API
+    ├── api/
+    └── schemas/
+```
+
+## 禁止事項
+
+❌ **やってはいけないこと:**
+
+1. ビジネスロジックをAPI層やService層に書く
+2. ドメイン層が外部技術（SQLAlchemy等）に依存する
+3. 型ヒントを省略する
+4. テストを書かない
+5. マジックナンバーを使う
+6. グローバル変数を使う
+7. 循環依存を作る
+
+## コミットメッセージ
+
+Conventional Commits形式：
+
+```
+feat: add user authentication
+fix: resolve N+1 query issue
+docs: update architecture guide
+refactor: extract pricing logic to domain service
+test: add tests for order confirmation
+```
+
+## 開発フロー
+
+1. **実装前**: `docs/ARCHITECTURE.md`でパターン確認
+2. **実装中**: `docs/PATTERNS.md`でコード例参照
+3. **実装後**: テストを書く
+4. **コミット前**: `make check`で品質確認
+
+## よく使うコマンド
+
+```bash
+make dev          # 開発サーバー起動
+make test         # テスト実行
+make fix          # コード自動修正
+make check        # 全チェック
+make db-migrate msg="description"  # マイグレーション作成
+```
+
+## AI への指示
+
+**コードを生成する際:**
+
+1. まず該当する`docs/`ドキュメントを読む
+2. 既存コード（catalog or orders）のパターンに従う
+3. 型ヒントを必ず付ける
+4. ビジネスロジックはドメイン層に配置
+5. テストコードも生成する
+
+**コードレビュー時:**
+
+1. アーキテクチャの原則に従っているか確認
+2. 型ヒントがあるか確認
+3. ビジネスロジックの配置が正しいか確認
+4. テストがあるか確認
+
+## 参考リンク
+
+- アーキテクチャ: docs/ARCHITECTURE.md
+- 規約: docs/CONVENTIONS.md
+- パターン: docs/PATTERNS.md
+- ドメイン: docs/DOMAIN_MODEL.md

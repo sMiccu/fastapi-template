@@ -1,0 +1,55 @@
+#!/bin/bash
+# post-commit hook - ドキュメントの自動更新チェック
+
+# カラー定義
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+
+# 最新のコミットで変更されたファイルを取得
+CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r HEAD)
+
+# 自動更新が必要かチェック
+NEEDS_UPDATE=false
+
+# pyproject.tomlの変更チェック
+if echo "$CHANGED_FILES" | grep -q "pyproject.toml"; then
+    echo -e "${YELLOW}📦 pyproject.tomlが変更されました${NC}"
+    echo "   docs/TECH_STACK.mdの更新を検討してください"
+    NEEDS_UPDATE=true
+fi
+
+# アーキテクチャ変更のチェック
+if echo "$CHANGED_FILES" | grep -qE "(domain|application|infrastructure)/"; then
+    echo -e "${YELLOW}🏗️  アーキテクチャ層に変更がありました${NC}"
+    echo "   docs/ARCHITECTURE.mdの確認をお勧めします"
+    NEEDS_UPDATE=true
+fi
+
+# モジュール変更のチェック
+if echo "$CHANGED_FILES" | grep -q "src/app/modules/"; then
+    echo -e "${YELLOW}📂 モジュールに変更がありました${NC}"
+    echo "   docs/DOMAIN_MODEL.mdの更新を検討してください"
+    NEEDS_UPDATE=true
+fi
+
+# README/設定ファイルの変更チェック
+if echo "$CHANGED_FILES" | grep -qE "(Makefile|Taskfile.yml|docker-compose.yml|Dockerfile)"; then
+    echo -e "${YELLOW}⚙️  開発環境の設定が変更されました${NC}"
+    echo "   docs/DEVELOPMENT.mdの更新を検討してください"
+    NEEDS_UPDATE=true
+fi
+
+# テストの変更チェック
+if echo "$CHANGED_FILES" | grep -q "tests/"; then
+    echo -e "${GREEN}🧪 テストが更新されました${NC}"
+fi
+
+if [ "$NEEDS_UPDATE" = true ]; then
+    echo ""
+    echo -e "${YELLOW}💡 Tip: 以下のコマンドでドキュメントを簡単に更新できます:${NC}"
+    echo "   make doc-check    # ドキュメント整合性チェック"
+    echo "   cursor docs/      # Cursorでドキュメントを開く"
+fi
+
+exit 0

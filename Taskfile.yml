@@ -1,0 +1,165 @@
+version: '3'
+
+vars:
+  PYTHON: uv run python
+  UVICORN: uv run uvicorn
+  PYTEST: uv run pytest
+  ALEMBIC: uv run alembic
+  RUFF: uv run ruff
+  MYPY: uv run mypy
+
+tasks:
+  # Development
+  dev:
+    desc: "開発サーバーを起動"
+    cmds:
+      - "{{.UVICORN}} app.main:app --reload --host 0.0.0.0 --port 8000"
+
+  shell:
+    desc: "IPythonシェルを起動"
+    cmds:
+      - uv run ipython
+
+  # Testing
+  test:
+    desc: "全テストを実行"
+    cmds:
+      - "{{.PYTEST}}"
+
+  test:unit:
+    desc: "単体テストのみ実行"
+    cmds:
+      - "{{.PYTEST}} -m unit"
+
+  test:integration:
+    desc: "統合テストのみ実行"
+    cmds:
+      - "{{.PYTEST}} -m integration"
+
+  test:e2e:
+    desc: "E2Eテストのみ実行"
+    cmds:
+      - "{{.PYTEST}} -m e2e"
+
+  test:cov:
+    desc: "カバレッジ付きでテスト実行"
+    cmds:
+      - "{{.PYTEST}} --cov=app --cov-report=html --cov-report=term"
+
+  test:watch:
+    desc: "テストをwatch modeで実行"
+    cmds:
+      - "{{.PYTEST}} -f"
+
+  # Code Quality
+  lint:
+    desc: "Lintingチェックを実行"
+    cmds:
+      - "{{.RUFF}} check ."
+
+  lint:fix:
+    desc: "Lintingエラーを自動修正"
+    cmds:
+      - "{{.RUFF}} check --fix ."
+
+  format:
+    desc: "コードをフォーマット"
+    cmds:
+      - "{{.RUFF}} format ."
+
+  format:check:
+    desc: "フォーマットチェック（変更なし）"
+    cmds:
+      - "{{.RUFF}} format --check ."
+
+  typecheck:
+    desc: "型チェックを実行"
+    cmds:
+      - "{{.MYPY}} src/app"
+
+  check:
+    desc: "全チェック（lint + typecheck + test）を実行"
+    cmds:
+      - task: lint
+      - task: typecheck
+      - task: test
+
+  # Database
+  db:upgrade:
+    desc: "データベースマイグレーションを適用"
+    cmds:
+      - "{{.ALEMBIC}} upgrade head"
+
+  db:downgrade:
+    desc: "データベースマイグレーションを1つ戻す"
+    cmds:
+      - "{{.ALEMBIC}} downgrade -1"
+
+  db:migration:
+    desc: "新しいマイグレーションを作成 (task db:migration -- 'message')"
+    cmds:
+      - "{{.ALEMBIC}} revision --autogenerate -m '{{.CLI_ARGS}}'"
+
+  db:history:
+    desc: "マイグレーション履歴を表示"
+    cmds:
+      - "{{.ALEMBIC}} history"
+
+  db:current:
+    desc: "現在のマイグレーションバージョンを表示"
+    cmds:
+      - "{{.ALEMBIC}} current"
+
+  # Docker
+  docker:up:
+    desc: "Docker Composeでサービスを起動"
+    cmds:
+      - docker-compose up -d
+
+  docker:down:
+    desc: "Docker Composeでサービスを停止"
+    cmds:
+      - docker-compose down
+
+  docker:logs:
+    desc: "Docker Composeのログを表示"
+    cmds:
+      - docker-compose logs -f
+
+  docker:ps:
+    desc: "Docker Composeのサービス状態を表示"
+    cmds:
+      - docker-compose ps
+
+  # Setup
+  setup:
+    desc: "プロジェクトの初期セットアップ"
+    cmds:
+      - uv sync
+      - task: docker:up
+      - sleep 3
+      - task: db:upgrade
+      - echo "✅ セットアップ完了！"
+
+  # Clean
+  clean:
+    desc: "キャッシュファイルを削除"
+    cmds:
+      - find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+      - find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
+      - find . -type d -name ".ruff_cache" -exec rm -rf {} + 2>/dev/null || true
+      - find . -type d -name ".mypy_cache" -exec rm -rf {} + 2>/dev/null || true
+      - find . -type d -name "htmlcov" -exec rm -rf {} + 2>/dev/null || true
+      - find . -type f -name "*.pyc" -delete 2>/dev/null || true
+      - echo "✅ キャッシュを削除しました"
+
+  # Utility
+  install:
+    desc: "依存関係をインストール"
+    cmds:
+      - uv sync
+
+  install:dev:
+    desc: "開発用依存関係も含めてインストール"
+    cmds:
+      - uv sync --all-extras
