@@ -117,14 +117,24 @@ run_checks() {
 
     echo -e "${BLUE}🔍 コード品質チェック中...${NC}"
 
-    # Lint
+    # Lint & Fix
     if ! make lint > /dev/null 2>&1; then
         echo -e "${YELLOW}⚠️  Lintエラーがあります。自動修正を試みます...${NC}"
         make lint-fix
+        # 修正されたファイルを自動でステージング
+        if [ -n "$(git diff)" ]; then
+            git add -A
+            echo -e "${GREEN}✓ 修正されたファイルを自動追加しました${NC}"
+        fi
     fi
 
     # Format
-    make format
+    make format > /dev/null 2>&1
+    # フォーマット後、変更があれば追加
+    if [ -n "$(git diff)" ]; then
+        git add -A
+        echo -e "${GREEN}✓ フォーマットされたファイルを自動追加しました${NC}"
+    fi
 
     # Type check
     if ! make typecheck > /dev/null 2>&1; then
@@ -202,8 +212,22 @@ do_commit() {
     # ドキュメント整合性チェック
     check_doc_updates
 
-    # コミット
-    git commit -m "$commit_msg"
+    # コミット（pre-commitフックが実行される）
+    MAX_RETRIES=3
+    for i in $(seq 1 $MAX_RETRIES); do
+        if git commit -m "$commit_msg"; then
+            break
+        else
+            # pre-commitフックでファイルが修正された場合
+            if [ -n "$(git diff)" ] && [ $i -lt $MAX_RETRIES ]; then
+                echo -e "${YELLOW}⚠️  pre-commitフックがファイルを修正しました。再試行中... ($i/$MAX_RETRIES)${NC}"
+                git add -A
+            else
+                echo -e "${RED}✗ コミット失敗${NC}"
+                exit 1
+            fi
+        fi
+    done
 
     echo -e "${GREEN}✓ コミット完了${NC}"
 
