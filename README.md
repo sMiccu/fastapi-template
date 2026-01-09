@@ -129,6 +129,7 @@ uv run uvicorn app.main:app --reload
 
 ### 🌟 まずこれを見る！
 - **[CHEATSHEET.md](CHEATSHEET.md)** - よく使うコマンド一覧（これだけでOK）📋
+- **[PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md)** - プロジェクト全体の仕組み 🏗️
 
 ### クイックリンク
 - **[QUICKSTART.md](QUICKSTART.md)** - 30秒でセットアップ ⚡
